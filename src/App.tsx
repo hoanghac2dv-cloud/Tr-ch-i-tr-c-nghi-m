@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from './lib/supabase';
+import Auth from './components/Auth';
+import AdminDashboard from './components/AdminDashboard';
+import { LogOut, Shield } from 'lucide-react';
 
 // --- HỆ THỐNG ÂM THANH (Web Audio API) ---
 const AudioEngine = {
@@ -106,6 +110,12 @@ export default function App() {
   
   const [isBGMPlaying, setIsBGMPlaying] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  
+  // Auth & Routing State
+  const [session, setSession] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [isAdminView, setIsAdminView] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // Modal Trạng thái
   const [activeQuestion, setActiveQuestion] = useState<Question | null>(null);
@@ -145,6 +155,37 @@ export default function App() {
     AudioEngine.toggleBGM(isBGMPlaying);
     return () => AudioEngine.toggleBGM(false);
   }, [isBGMPlaying]);
+
+  // Auth Logic
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) fetchProfile(session.user.id);
+      setIsAuthLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) fetchProfile(session.user.id);
+      else setUserProfile(null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchProfile = async (uid: string) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', uid)
+      .single();
+    if (!error) setUserProfile(data);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setIsAdminView(false);
+  };
 
   // Bộ đếm thời gian
   useEffect(() => {
@@ -451,19 +492,65 @@ export default function App() {
 
   const paginatedStudents = filteredStudents.slice((currentPage - 1) * STUDENTS_PER_PAGE, currentPage * STUDENTS_PER_PAGE);
 
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-indigo-900">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-yellow-400"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Auth onSuccess={() => {}} />;
+  }
+
+  if (isAdminView && userProfile?.role === 'admin') {
+    return (
+      <div className="relative">
+        <button 
+          onClick={() => setIsAdminView(false)}
+          className="fixed top-4 right-4 z-50 bg-white text-indigo-900 px-4 py-2 rounded-lg font-bold shadow-lg hover:bg-gray-100 transition"
+        >
+          Quay lại Game
+        </button>
+        <AdminDashboard />
+      </div>
+    );
+  }
+
   return (
-    <div className={`min-h-screen font-sans transition-colors duration-500 ${isDarkMode ? 'bg-gray-900 text-gray-100' : 'bg-purple-100/80 text-gray-900'}`} style={{ backgroundColor: isDarkMode ? '#1a1a2e' : '#EAD1EB', backgroundImage: isDarkMode ? 'none' : "url('https://www.transparenttextures.com/patterns/stardust.png')" }}>
+    <div className={`min-h-screen font-sans transition-colors duration-500 flex p-4 gap-4 ${isDarkMode ? 'bg-gray-900 text-gray-100' : 'bg-purple-100/80 text-gray-900'}`} style={{ backgroundColor: isDarkMode ? '#1a1a2e' : '#EAD1EB', backgroundImage: isDarkMode ? 'none' : "url('https://www.transparenttextures.com/patterns/stardust.png')" }}>
       
+      {/* Nút Admin & Logout */}
+      <div className="fixed bottom-4 right-4 flex gap-2 z-40">
+        {userProfile?.role === 'admin' && (
+          <button 
+            onClick={() => setIsAdminView(true)}
+            className="bg-purple-600 text-white p-3 rounded-full shadow-xl hover:bg-purple-700 transition"
+            title="Trang quản trị"
+          >
+            <Shield className="w-6 h-6" />
+          </button>
+        )}
+        <button 
+          onClick={handleLogout}
+          className="bg-red-500 text-white p-3 rounded-full shadow-xl hover:bg-red-600 transition"
+          title="Đăng xuất"
+        >
+          <LogOut className="w-6 h-6" />
+        </button>
+      </div>
+
       {/* 1. CỘT TRÁI - QUẢN LÝ HỌC SINH & LỚP */}
       <div className={`w-[350px] max-w-full flex-shrink-0 border-[12px] rounded-3xl p-4 shadow-xl flex flex-col h-[95vh] overflow-hidden transition-colors duration-500 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-[#FAD998] border-[#D79A51]'}`}>
         
         <div className={`mb-4 p-3 rounded-xl border shadow-sm transition-colors duration-500 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white/70 border-yellow-600/30'}`}>
-          <div className="flex gap-2 items-center mb-2">
+          <div className="flex gap-2 items-center mb-2 justify-start">
             <span className={`font-bold whitespace-nowrap text-sm ${isDarkMode ? 'text-yellow-400' : 'text-red-600'}`}>LỚP:</span>
             <select 
               value={activeClass} 
               onChange={e => { setActiveClass(e.target.value); setCurrentPage(1); setSearchQuery(''); }} 
-              className={`flex-1 p-1.5 rounded-lg border-2 outline-none font-bold transition-colors duration-500 ${isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-red-300 text-indigo-900'}`}
+              className={`min-w-[120px] p-1.5 rounded-lg border-2 outline-none font-bold transition-colors duration-500 ${isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-white border-red-300 text-indigo-900'}`}
             >
               {Object.keys(classData).map(c => <option key={c} value={c}>{c}</option>)}
             </select>
