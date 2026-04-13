@@ -116,6 +116,7 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isAdminView, setIsAdminView] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Modal Trạng thái
   const [activeQuestion, setActiveQuestion] = useState<Question | null>(null);
@@ -158,11 +159,32 @@ export default function App() {
 
   // Auth Logic
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) fetchProfile(session.user.id);
-      setIsAuthLoading(false);
-    });
+    const checkAuth = async () => {
+      try {
+        // Timeout after 5 seconds if Supabase doesn't respond
+        const timeout = setTimeout(() => {
+          if (isAuthLoading) {
+            setIsAuthLoading(false);
+            setAuthError("Không thể kết nối với hệ thống xác thực. Vui lòng kiểm tra cấu hình Supabase.");
+          }
+        }, 5000);
+
+        const { data: { session }, error } = await supabase.auth.getSession();
+        clearTimeout(timeout);
+        
+        if (error) throw error;
+        
+        setSession(session);
+        if (session) await fetchProfile(session.user.id);
+        setIsAuthLoading(false);
+      } catch (err: any) {
+        console.error("Auth error:", err);
+        setAuthError(err.message || "Lỗi xác thực");
+        setIsAuthLoading(false);
+      }
+    };
+
+    checkAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
@@ -494,8 +516,33 @@ export default function App() {
 
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-indigo-900">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-yellow-400"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-indigo-900 text-white p-6">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-yellow-400 mb-4"></div>
+        <p className="text-indigo-200 animate-pulse">Đang kiểm tra quyền truy cập...</p>
+      </div>
+    );
+  }
+
+  if (authError || (!import.meta.env.VITE_SUPABASE_URL && !session)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
+        <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl text-center">
+          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Shield className="w-10 h-10 text-red-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Thiếu cấu hình Supabase</h2>
+          <p className="text-gray-600 mb-6">
+            Ứng dụng cần thông tin kết nối Supabase để hoạt động. Vui lòng kiểm tra các biến môi trường:
+            <code className="block bg-gray-100 p-2 rounded mt-2 text-sm text-red-500">VITE_SUPABASE_URL</code>
+            <code className="block bg-gray-100 p-2 rounded mt-1 text-sm text-red-500">VITE_SUPABASE_ANON_KEY</code>
+          </p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition"
+          >
+            Thử lại
+          </button>
+        </div>
       </div>
     );
   }
