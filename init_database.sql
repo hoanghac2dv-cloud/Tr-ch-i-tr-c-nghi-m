@@ -2,6 +2,9 @@
 -- SQL KHỞI TẠO CƠ SỞ DỮ LIỆU OLYMPIA GAME
 -- ==========================================
 
+-- Bật extension để tạo UUID tự động (nếu chưa có)
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 -- 1. Bảng Profiles (Lưu thông tin người dùng và vai trò)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,

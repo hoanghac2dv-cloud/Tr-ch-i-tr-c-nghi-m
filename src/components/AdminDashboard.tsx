@@ -62,13 +62,21 @@ export default function AdminDashboard() {
     try {
       if (activeTab === 'classes') {
         const { error } = await supabase.from('classes').insert([{ name: newItemName }]);
-        if (error) throw error;
+        if (error) {
+          if (error.code === '23505') {
+            alert(`Lớp "${newItemName}" đã tồn tại!`);
+          } else {
+            alert(`Lỗi: ${error.message}`);
+          }
+          return;
+        }
       }
       setNewItemName('');
       setShowAddModal(false);
       fetchData();
-    } catch (err) {
-      alert('Lỗi thêm dữ liệu');
+    } catch (err: any) {
+      console.error('Error adding item:', err);
+      alert('Lỗi kết nối khi thêm dữ liệu');
     }
   };
 

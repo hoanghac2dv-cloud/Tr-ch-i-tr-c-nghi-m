@@ -142,6 +142,11 @@ export default function App() {
   // Khởi tạo dữ liệu
   useEffect(() => {
     const initApp = async () => {
+      if (import.meta.env.VITE_SUPABASE_URL === undefined || import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
+        setAuthError("Cấu hình Supabase chưa hoàn tất. Vui lòng thiết lập VITE_SUPABASE_URL và VITE_SUPABASE_ANON_KEY trong biến môi trường.");
+        setIsAuthLoading(false);
+        return;
+      }
       try {
         await fetchGameData();
         setIsAuthLoading(false);
@@ -244,15 +249,23 @@ export default function App() {
     
     try {
       const { data, error } = await supabase.from('classes').insert([{ name: trimmed }]).select().single();
-      if (error) throw error;
+      if (error) {
+        if (error.code === '23505') {
+          alert(`Lớp "${trimmed}" đã tồn tại trong hệ thống!`);
+        } else {
+          alert(`Lỗi: ${error.message}`);
+        }
+        return;
+      }
 
       setClassData(prev => ({ ...prev, [trimmed]: [] }));
       setActiveClass(trimmed);
       setNewClassNameInput('');
       setCurrentPage(1);
       setSearchQuery('');
-    } catch (err) {
-      alert("Lỗi thêm lớp học");
+    } catch (err: any) {
+      console.error("Add class error:", err);
+      alert("Lỗi kết nối cơ sở dữ liệu khi thêm lớp học.");
     }
   };
 
