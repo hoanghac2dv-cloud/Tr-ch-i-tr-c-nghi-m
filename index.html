@@ -4,6 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
+    <script>
+      // Phòng ngừa lỗi "Cannot set property fetch of #<Window> which has only a getter"
+      // Xảy ra khi một số thư viện cố gắng ghi đè window.fetch trong môi trường iframe bảo mật.
+      (function() {
+        const _fetch = window.fetch;
+        try {
+          Object.defineProperty(window, 'fetch', {
+            get: function() { return _fetch; },
+            set: function() { console.warn('Hệ thống ngăn chặn việc ghi đè window.fetch để tránh lỗi.'); },
+            configurable: true
+          });
+        } catch (e) {
+          // Nếu không thể định nghĩa lại, ít nhất chúng ta đã cố gắng.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

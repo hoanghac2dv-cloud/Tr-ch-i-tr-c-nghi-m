@@ -93,8 +93,8 @@ interface Question {
 
 export default function App() {
   // Trạng thái ứng dụng
-  const [classData, setClassData] = useState<{ [key: string]: Student[] }>({ '9B': [] });
-  const [activeClass, setActiveClass] = useState('9B');
+  const [classData, setClassData] = useState<{ [key: string]: Student[] }>({});
+  const [activeClass, setActiveClass] = useState('');
   const [newClassNameInput, setNewClassNameInput] = useState('');
   
   const [newStudentName, setNewStudentName] = useState('');
@@ -102,9 +102,9 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const STUDENTS_PER_PAGE = 10;
   
-  const currentStudents = classData[activeClass] || [];
+  const currentStudents = activeClass ? (classData[activeClass] || []) : [];
 
-  const [questions, setQuestions] = useState<Question[]>(generateDefaultQuestions());
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [timerSetting, setTimerSetting] = useState(15);
   const [timerInput, setTimerInput] = useState(15);
   
@@ -175,7 +175,10 @@ export default function App() {
         if (error) throw error;
         
         setSession(session);
-        if (session) await fetchProfile(session.user.id);
+        if (session) {
+          await fetchProfile(session.user.id);
+          await fetchGameData();
+        }
         setIsAuthLoading(false);
       } catch (err: any) {
         console.error("Auth error:", err);
@@ -188,12 +191,66 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) fetchProfile(session.user.id);
-      else setUserProfile(null);
+      if (session) {
+        fetchProfile(session.user.id);
+        fetchGameData();
+      } else {
+        setUserProfile(null);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const fetchGameData = async () => {
+    try {
+      // Fetch Classes & Students
+      const { data: classes, error: classError } = await supabase.from('classes').select('*, students(*)');
+      if (classError) throw classError;
+
+      const formattedData: { [key: string]: Student[] } = {};
+      classes.forEach((c: any) => {
+        formattedData[c.name] = c.students.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          score: s.score
+        }));
+      });
+      setClassData(formattedData);
+      if (classes.length > 0 && !activeClass) {
+        setActiveClass(classes[0].name);
+      }
+
+      // Fetch Questions
+      const { data: qs, error: qError } = await supabase.from('questions').select('*').order('id', { ascending: true });
+      if (qError) throw qError;
+      
+      if (qs && qs.length > 0) {
+        setQuestions(qs.map((q: any) => ({
+          id: q.id,
+          question: q.question,
+          options: q.options,
+          correctAnswer: q.correct_answer,
+          isAnswered: q.is_answered
+        })));
+      } else {
+        // If no questions in DB, generate and save defaults
+        const defaults = generateDefaultQuestions();
+        setQuestions(defaults);
+        // We don't auto-save to DB here to avoid spamming, but Admin can do it.
+      }
+
+      // Fetch Settings
+      const { data: settings, error: sError } = await supabase.from('app_settings').select('*').eq('key', 'game_config').single();
+      if (!sError && settings) {
+        setTimerSetting(settings.value.timer);
+        setTimerInput(settings.value.timer);
+        setIsDarkMode(settings.value.isDarkMode);
+      }
+    } catch (err) {
+      console.error("Error fetching game data:", err);
+    }
+  };
 
   const fetchProfile = async (uid: string) => {
     const { data, error } = await supabase
@@ -228,60 +285,115 @@ export default function App() {
 
   // --- CÁC HÀM XỬ LÝ LOGIC ---
 
-  const updateCurrentStudents = (newStudents: Student[]) => {
-    setClassData(prev => ({ ...prev, [activeClass]: newStudents }));
-  };
-
-  const handleAddClass = (e: React.FormEvent) => {
+  const handleAddClass = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newClassNameInput.trim();
     if (!trimmed || classData[trimmed]) return;
-    setClassData(prev => ({ ...prev, [trimmed]: [] }));
-    setActiveClass(trimmed);
-    setNewClassNameInput('');
-    setCurrentPage(1);
-    setSearchQuery('');
-  };
+    
+    try {
+      const { data, error } = await supabase.from('classes').insert([{ name: trimmed }]).select().single();
+      if (error) throw error;
 
-  const handleDeleteClass = () => {
-    if(window.confirm(`Xác nhận xóa lớp ${activeClass} và toàn bộ danh sách học sinh của lớp này?`)) {
-      const newData = {...classData};
-      delete newData[activeClass];
-      const keys = Object.keys(newData);
-      if(keys.length === 0) {
-        newData['Lớp Mới'] = [];
-        setActiveClass('Lớp Mới');
-      } else {
-        setActiveClass(keys[0]);
-      }
-      setClassData(newData);
+      setClassData(prev => ({ ...prev, [trimmed]: [] }));
+      setActiveClass(trimmed);
+      setNewClassNameInput('');
       setCurrentPage(1);
       setSearchQuery('');
+    } catch (err) {
+      alert("Lỗi thêm lớp học");
     }
   };
 
-  const handleAddStudent = (e: React.FormEvent) => {
+  const handleDeleteClass = async () => {
+    if(window.confirm(`Xác nhận xóa lớp ${activeClass} và toàn bộ danh sách học sinh của lớp này?`)) {
+      try {
+        const { error } = await supabase.from('classes').delete().eq('name', activeClass);
+        if (error) throw error;
+
+        const newData = {...classData};
+        delete newData[activeClass];
+        const keys = Object.keys(newData);
+        if(keys.length === 0) {
+          setActiveClass('');
+        } else {
+          setActiveClass(keys[0]);
+        }
+        setClassData(newData);
+        setCurrentPage(1);
+        setSearchQuery('');
+      } catch (err) {
+        alert("Lỗi xóa lớp học");
+      }
+    }
+  };
+
+  const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStudentName.trim()) return;
-    updateCurrentStudents([...currentStudents, { id: Date.now().toString(), name: newStudentName, score: 0 }]);
-    setNewStudentName('');
+    if (!newStudentName.trim() || !activeClass) return;
+
+    try {
+      const { data: classObj } = await supabase.from('classes').select('id').eq('name', activeClass).single();
+      if (!classObj) return;
+
+      const { data, error } = await supabase.from('students').insert([{ 
+        class_id: classObj.id, 
+        name: newStudentName, 
+        score: 0 
+      }]).select().single();
+      
+      if (error) throw error;
+
+      setClassData(prev => ({
+        ...prev,
+        [activeClass]: [...(prev[activeClass] || []), { id: data.id, name: data.name, score: data.score }]
+      }));
+      setNewStudentName('');
+    } catch (err) {
+      alert("Lỗi thêm học sinh");
+    }
   };
 
-  const handleRemoveStudent = (id: string) => {
-    updateCurrentStudents(currentStudents.filter(s => s.id !== id));
+  const handleRemoveStudent = async (id: string) => {
+    try {
+      const { error } = await supabase.from('students').delete().eq('id', id);
+      if (error) throw error;
+
+      setClassData(prev => ({
+        ...prev,
+        [activeClass]: prev[activeClass].filter(s => s.id !== id)
+      }));
+    } catch (err) {
+      alert("Lỗi xóa học sinh");
+    }
   };
 
-  const handleBulkImportSave = () => {
-    if (!bulkText.trim()) return;
+  const handleBulkImportSave = async () => {
+    if (!bulkText.trim() || !activeClass) return;
     const names = bulkText.split('\n').map(n => n.trim()).filter(n => n !== '');
-    const newStudents = names.map(name => ({
-      id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
-      name: name,
-      score: 0
-    }));
-    updateCurrentStudents([...currentStudents, ...newStudents]);
-    setBulkText('');
-    setShowBulkImport(false);
+    
+    try {
+      const { data: classObj } = await supabase.from('classes').select('id').eq('name', activeClass).single();
+      if (!classObj) return;
+
+      const newStudentsPayload = names.map(name => ({
+        class_id: classObj.id,
+        name: name,
+        score: 0
+      }));
+
+      const { data, error } = await supabase.from('students').insert(newStudentsPayload).select();
+      if (error) throw error;
+
+      const imported = data.map((s: any) => ({ id: s.id, name: s.name, score: s.score }));
+      setClassData(prev => ({
+        ...prev,
+        [activeClass]: [...(prev[activeClass] || []), ...imported]
+      }));
+      setBulkText('');
+      setShowBulkImport(false);
+    } catch (err) {
+      alert("Lỗi nhập danh sách");
+    }
   };
 
   const handleExportJSON = () => {
@@ -296,19 +408,35 @@ export default function App() {
 
   const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !activeClass) return;
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
         if (Array.isArray(parsed)) {
-          updateCurrentStudents(parsed);
+          const { data: classObj } = await supabase.from('classes').select('id').eq('name', activeClass).single();
+          if (!classObj) return;
+
+          const studentsToInsert = parsed.map(s => ({
+            class_id: classObj.id,
+            name: s.name,
+            score: s.score || 0
+          }));
+
+          const { data, error } = await supabase.from('students').insert(studentsToInsert).select();
+          if (error) throw error;
+
+          const imported = data.map((s: any) => ({ id: s.id, name: s.name, score: s.score }));
+          setClassData(prev => ({
+            ...prev,
+            [activeClass]: [...(prev[activeClass] || []), ...imported]
+          }));
           alert("Đã nhập danh sách thành công!");
         } else {
           alert("File JSON không đúng định dạng (phải là một mảng)!");
         }
       } catch (err) {
-        alert("Lỗi đọc file JSON. Vui lòng kiểm tra lại file!");
+        alert("Lỗi nhập danh sách từ file JSON.");
       }
     };
     reader.readAsText(file);
@@ -324,12 +452,29 @@ export default function App() {
     setQuestions(shuffled);
   };
 
-  const handleResetQuestions = () => {
-    setQuestions(questions.map(q => ({ ...q, isAnswered: false })));
+  const handleResetQuestions = async () => {
+    try {
+      const { error } = await supabase.from('questions').update({ is_answered: false }).neq('id', 0);
+      if (error) throw error;
+      setQuestions(questions.map(q => ({ ...q, isAnswered: false })));
+    } catch (err) {
+      alert("Lỗi reset câu hỏi");
+    }
   };
 
-  const handleResetScores = () => {
-    updateCurrentStudents(currentStudents.map(s => ({ ...s, score: 0 })));
+  const handleResetScores = async () => {
+    try {
+      const studentIds = currentStudents.map(s => s.id);
+      const { error } = await supabase.from('students').update({ score: 0 }).in('id', studentIds);
+      if (error) throw error;
+      
+      setClassData(prev => ({
+        ...prev,
+        [activeClass]: prev[activeClass].map(s => ({ ...s, score: 0 }))
+      }));
+    } catch (err) {
+      alert("Lỗi reset điểm");
+    }
   };
 
   const openQuestionModal = (question: Question) => {
@@ -345,31 +490,44 @@ export default function App() {
     setShowAnswerResult(null);
   };
 
-  const handleSubmitAnswer = (selectedIndex: number) => {
+  const handleSubmitAnswer = async (selectedIndex: number) => {
     if (showAnswerResult || !answeringStudentId || !activeQuestion) return;
 
     const isCorrect = selectedIndex === activeQuestion.correctAnswer;
     setShowAnswerResult(isCorrect ? 'correct' : 'wrong');
 
-    if (isCorrect) {
-      AudioEngine.playCorrect();
-      updateCurrentStudents(currentStudents.map(s => 
-        s.id === answeringStudentId ? { ...s, score: s.score + 10 } : s
-      ));
-    } else {
-      AudioEngine.playWrong();
-    }
+    try {
+      if (isCorrect) {
+        AudioEngine.playCorrect();
+        const student = currentStudents.find(s => s.id === answeringStudentId);
+        if (student) {
+          const newScore = student.score + 10;
+          await supabase.from('students').update({ score: newScore }).eq('id', answeringStudentId);
+          
+          setClassData(prev => ({
+            ...prev,
+            [activeClass]: prev[activeClass].map(s => 
+              s.id === answeringStudentId ? { ...s, score: newScore } : s
+            )
+          }));
+        }
+      } else {
+        AudioEngine.playWrong();
+      }
 
-    setQuestions(questions.map(q => 
-      q.id === activeQuestion.id ? { ...q, isAnswered: true } : q
-    ));
+      await supabase.from('questions').update({ is_answered: true }).eq('id', activeQuestion.id);
+      setQuestions(questions.map(q => 
+        q.id === activeQuestion.id ? { ...q, isAnswered: true } : q
+      ));
+    } catch (err) {
+      console.error("Error submitting answer:", err);
+    }
   };
 
-  const handleSaveEditedQuestion = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveEditedQuestion = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const updatedQ: Question = {
-      id: editingQuestionId,
+    const updatedQ = {
       question: formData.get('questionText') as string,
       options: [
         formData.get('opt0') as string,
@@ -377,12 +535,19 @@ export default function App() {
         formData.get('opt2') as string,
         formData.get('opt3') as string
       ],
-      correctAnswer: parseInt(formData.get('correctOpt') as string),
-      isAnswered: false
+      correct_answer: parseInt(formData.get('correctOpt') as string),
+      is_answered: false
     };
 
-    setQuestions(questions.map(q => q.id === editingQuestionId ? updatedQ : q));
-    alert('Đã lưu câu hỏi!');
+    try {
+      const { error } = await supabase.from('questions').update(updatedQ).eq('id', editingQuestionId);
+      if (error) throw error;
+
+      setQuestions(questions.map(q => q.id === editingQuestionId ? { ...q, ...updatedQ, correctAnswer: updatedQ.correct_answer, isAnswered: false } : q));
+      alert('Đã lưu câu hỏi!');
+    } catch (err) {
+      alert("Lỗi lưu câu hỏi");
+    }
   };
 
   const handleExportQuestions = () => {
@@ -481,12 +646,24 @@ export default function App() {
               id: idx + 1,
               question: genQ?.question || `Câu hỏi AI ${idx + 1}`,
               options: genQ?.options?.length === 4 ? genQ.options : ['A', 'B', 'C', 'D'],
-              correctAnswer: genQ?.correctAnswer !== undefined ? genQ.correctAnswer : 0,
-              isAnswered: false,
+              correct_answer: genQ?.correctAnswer !== undefined ? genQ.correctAnswer : 0,
+              is_answered: false,
             };
           });
-          setQuestions(newQuestions);
-          alert("✨ Đã soạn xong 60 câu hỏi bằng AI!");
+
+          // Save to Supabase
+          const { error } = await supabase.from('questions').upsert(newQuestions);
+          if (error) throw error;
+
+          setQuestions(newQuestions.map(q => ({
+            id: q.id,
+            question: q.question,
+            options: q.options,
+            correctAnswer: q.correct_answer,
+            isAnswered: q.is_answered
+          })));
+          
+          alert("✨ Đã soạn xong 60 câu hỏi bằng AI và lưu vào DB!");
           setShowAIModal(false);
           break;
         }

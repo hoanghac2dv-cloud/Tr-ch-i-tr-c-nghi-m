@@ -6,7 +6,11 @@ import { Users, BookOpen, Settings, ShieldCheck, Trash2, Edit, Plus, Search } fr
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'users' | 'classes' | 'questions'>('users');
   const [users, setUsers] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -19,12 +23,46 @@ export default function AdminDashboard() {
         const { data, error } = await supabase.from('profiles').select('*');
         if (error) throw error;
         setUsers(data || []);
+      } else if (activeTab === 'classes') {
+        const { data, error } = await supabase.from('classes').select('*, students(*)');
+        if (error) throw error;
+        setClasses(data || []);
+      } else if (activeTab === 'questions') {
+        const { data, error } = await supabase.from('questions').select('*').order('id', { ascending: true });
+        if (error) throw error;
+        setQuestions(data || []);
       }
-      // Add logic for classes and questions as needed
     } catch (err) {
       console.error('Error fetching admin data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddItem = async () => {
+    if (!newItemName.trim()) return;
+    try {
+      if (activeTab === 'classes') {
+        const { error } = await supabase.from('classes').insert([{ name: newItemName }]);
+        if (error) throw error;
+      }
+      setNewItemName('');
+      setShowAddModal(false);
+      fetchData();
+    } catch (err) {
+      alert('Lỗi thêm dữ liệu');
+    }
+  };
+
+  const deleteItem = async (id: string | number) => {
+    if (!window.confirm('Xác nhận xóa?')) return;
+    try {
+      const table = activeTab === 'users' ? 'profiles' : activeTab;
+      const { error } = await supabase.from(table).delete().eq('id', id);
+      if (error) throw error;
+      fetchData();
+    } catch (err) {
+      alert('Lỗi xóa dữ liệu');
     }
   };
 
@@ -100,11 +138,35 @@ export default function AdminDashboard() {
                 className="pl-10 pr-4 py-2 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
-            <button className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-indigo-700 transition shadow-md">
-              <Plus className="w-4 h-4" /> Thêm mới
-            </button>
+            {activeTab === 'classes' && (
+              <button 
+                onClick={() => setShowAddModal(true)}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-indigo-700 transition shadow-md"
+              >
+                <Plus className="w-4 h-4" /> Thêm lớp
+              </button>
+            )}
           </div>
         </header>
+
+        {showAddModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+              <h3 className="text-xl font-bold mb-4">Thêm lớp học mới</h3>
+              <input 
+                type="text" 
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+                placeholder="Tên lớp (VD: 10A1)"
+                className="w-full px-4 py-2 border rounded-lg mb-4 outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setShowAddModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">Hủy</button>
+                <button onClick={handleAddItem} className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold">Thêm</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center h-64">
@@ -146,7 +208,34 @@ export default function AdminDashboard() {
                       <button className="p-2 text-gray-400 hover:bg-gray-50 rounded-lg transition-colors">
                         <Edit className="w-4 h-4" />
                       </button>
-                      <button className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                      <button onClick={() => deleteItem(user.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : activeTab === 'classes' ? (
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Tên lớp</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Số học sinh</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Ngày tạo</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {classes.map((cls) => (
+                  <tr key={cls.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 text-sm font-bold text-gray-900">{cls.name}</td>
+                    <td className="px-6 py-4 text-sm text-gray-500">{cls.students?.length || 0} học sinh</td>
+                    <td className="px-6 py-4 text-sm text-gray-500">{new Date(cls.created_at).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-right space-x-2">
+                      <button onClick={() => deleteItem(cls.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
@@ -156,12 +245,35 @@ export default function AdminDashboard() {
             </table>
           </div>
         ) : (
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-20 text-center">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-indigo-50 rounded-full mb-6">
-              <Settings className="w-10 h-10 text-indigo-400" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Tính năng đang phát triển</h3>
-            <p className="text-gray-500">Chức năng quản lý {activeTab === 'classes' ? 'lớp học' : 'câu hỏi'} chuyên sâu sẽ sớm được cập nhật.</p>
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">ID</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Câu hỏi</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Trạng thái</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {questions.map((q) => (
+                  <tr key={q.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 text-sm text-gray-500 font-mono">{q.id}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900 max-w-md truncate">{q.question}</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${q.is_answered ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                        {q.is_answered ? 'Đã dùng' : 'Chưa dùng'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right space-x-2">
+                      <button onClick={() => deleteItem(q.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
