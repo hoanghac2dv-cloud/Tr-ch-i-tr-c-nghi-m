@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './lib/supabase';
 import AdminDashboard from './components/AdminDashboard';
+import { DEFAULT_QUESTIONS_DATA } from './lib/constants';
 import { Shield, Settings, Moon, Sun, Volume2, VolumeX } from 'lucide-react';
 
 // --- HỆ THỐNG ÂM THANH (Web Audio API) ---
@@ -67,11 +68,11 @@ const AudioEngine = {
 
 // --- DỮ LIỆU MẶC ĐỊNH ---
 const generateDefaultQuestions = () => {
-  return Array.from({ length: 60 }, (_, i) => ({
+  return DEFAULT_QUESTIONS_DATA.map((item, i) => ({
     id: i + 1,
-    question: `Câu hỏi số ${i + 1}: Thủ đô của Việt Nam là gì? (Câu hỏi mẫu)`,
-    options: ['Hà Nội', 'TP. Hồ Chí Minh', 'Đà Nẵng', 'Hải Phòng'],
-    correctAnswer: 0, // Vị trí đáp án đúng (0-3)
+    question: item.q,
+    options: item.o,
+    correctAnswer: item.a,
     isAnswered: false,
   }));
 };

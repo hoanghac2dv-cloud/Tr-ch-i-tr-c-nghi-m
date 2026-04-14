@@ -84,3 +84,19 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
 INSERT INTO public.app_settings (key, value)
 VALUES ('game_config', '{"timer": 15, "isDarkMode": false}')
 ON CONFLICT (key) DO NOTHING;
+
+-- Thêm lớp mẫu
+INSERT INTO public.classes (id, name)
+VALUES 
+  ('a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1', 'Lớp 10A1'),
+  ('b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2', 'Lớp 11B2')
+ON CONFLICT (name) DO NOTHING;
+
+-- Thêm học sinh mẫu cho lớp 10A1
+INSERT INTO public.students (class_id, name, score)
+VALUES 
+  ('a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1', 'Nguyễn Văn An', 0),
+  ('a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1', 'Trần Thị Bình', 0),
+  ('a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1', 'Lê Văn Cường', 0),
+  ('a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1', 'Phạm Minh Đức', 0)
+ON CONFLICT DO NOTHING;

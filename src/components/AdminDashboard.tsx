@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { DEFAULT_QUESTIONS_DATA } from '../lib/constants';
 import { motion } from 'motion/react';
 import { Users, BookOpen, Settings, ShieldCheck, Trash2, Edit, Plus, Search } from 'lucide-react';
 
@@ -95,6 +96,36 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleResetQuestions = async () => {
+    if (!window.confirm('Bạn có muốn xóa toàn bộ câu hỏi hiện tại và thay thế bằng 60 câu hỏi mẫu không?')) return;
+    setLoading(true);
+    try {
+      // 1. Delete all existing questions
+      const { error: deleteError } = await supabase.from('questions').delete().neq('id', 0);
+      if (deleteError) throw deleteError;
+
+      // 2. Insert default questions
+      const newQuestions = DEFAULT_QUESTIONS_DATA.map((item, i) => ({
+        id: i + 1,
+        question: item.q,
+        options: item.o,
+        correct_answer: item.a,
+        is_answered: false
+      }));
+
+      const { error: insertError } = await supabase.from('questions').insert(newQuestions);
+      if (insertError) throw insertError;
+
+      alert('Đã khởi tạo 60 câu hỏi mẫu thành công!');
+      fetchData();
+    } catch (err) {
+      console.error('Error resetting questions:', err);
+      alert('Lỗi khi khởi tạo câu hỏi mẫu');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
@@ -156,6 +187,14 @@ export default function AdminDashboard() {
                 className="pl-10 pr-4 py-2 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
+            {activeTab === 'questions' && (
+              <button 
+                onClick={handleResetQuestions}
+                className="bg-orange-500 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-orange-600 transition shadow-md"
+              >
+                <Settings className="w-4 h-4" /> Khởi tạo câu hỏi mẫu
+              </button>
+            )}
             {activeTab === 'classes' && (
               <button 
                 onClick={() => setShowAddModal(true)}
