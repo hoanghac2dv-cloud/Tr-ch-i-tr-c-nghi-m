@@ -13,6 +13,7 @@ export default function AdminDashboard() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [editingQuestion, setEditingQuestion] = useState<any>(null);
 
   useEffect(() => {
     setSearchQuery('');
@@ -126,6 +127,28 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleUpdateQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingQuestion) return;
+    try {
+      const { error } = await supabase
+        .from('questions')
+        .update({
+          question: editingQuestion.question,
+          options: editingQuestion.options,
+          correct_answer: editingQuestion.correct_answer,
+          is_answered: false
+        })
+        .eq('id', editingQuestion.id);
+      if (error) throw error;
+      setEditingQuestion(null);
+      fetchData();
+      alert('Đã cập nhật câu hỏi!');
+    } catch (err) {
+      alert('Lỗi cập nhật câu hỏi');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
@@ -221,6 +244,60 @@ export default function AdminDashboard() {
                 <button onClick={() => setShowAddModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">Hủy</button>
                 <button onClick={handleAddItem} className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold">Thêm</button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {editingQuestion && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+              <h3 className="text-xl font-bold mb-4">Chỉnh sửa câu hỏi #{editingQuestion.id}</h3>
+              <form onSubmit={handleUpdateQuestion} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Nội dung câu hỏi</label>
+                  <textarea 
+                    value={editingQuestion.question}
+                    onChange={e => setEditingQuestion({...editingQuestion, question: e.target.value})}
+                    className="w-full border rounded-lg p-2 min-h-[100px] outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {editingQuestion.options.map((opt: string, idx: number) => (
+                    <div key={idx}>
+                      <label className="block text-sm font-bold text-gray-700 mb-1">Đáp án {['A', 'B', 'C', 'D'][idx]}</label>
+                      <input 
+                        type="text"
+                        value={opt}
+                        onChange={e => {
+                          const newOpts = [...editingQuestion.options];
+                          newOpts[idx] = e.target.value;
+                          setEditingQuestion({...editingQuestion, options: newOpts});
+                        }}
+                        className="w-full border rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                        required
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Đáp án đúng</label>
+                  <select 
+                    value={editingQuestion.correct_answer}
+                    onChange={e => setEditingQuestion({...editingQuestion, correct_answer: parseInt(e.target.value)})}
+                    className="w-full border rounded-lg p-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value={0}>A</option>
+                    <option value={1}>B</option>
+                    <option value={2}>C</option>
+                    <option value={3}>D</option>
+                  </select>
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                  <button type="button" onClick={() => setEditingQuestion(null)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">Hủy</button>
+                  <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold">Lưu thay đổi</button>
+                </div>
+              </form>
             </div>
           </div>
         )}
@@ -323,6 +400,13 @@ export default function AdminDashboard() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right space-x-2">
+                      <button 
+                        onClick={() => setEditingQuestion(q)}
+                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        title="Sửa câu hỏi"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
                       <button onClick={() => deleteItem(q.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>

@@ -404,11 +404,12 @@ export default function App() {
     setQuestions(shuffled);
   };
 
-  const handleResetQuestions = async () => {
+  const handleResetAnswerStatus = async () => {
     try {
       const { error } = await supabase.from('questions').update({ is_answered: false }).neq('id', 0);
       if (error) throw error;
       setQuestions(questions.map(q => ({ ...q, isAnswered: false })));
+      alert("Đã reset trạng thái tất cả câu hỏi!");
     } catch (err) {
       alert("Lỗi reset câu hỏi");
     }
@@ -517,7 +518,7 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -527,17 +528,28 @@ export default function App() {
               id: i + 1,
               question: importedQ?.question || `Câu hỏi ${i + 1}`,
               options: importedQ?.options?.length === 4 ? importedQ.options : ['A', 'B', 'C', 'D'],
-              correctAnswer: importedQ?.correctAnswer !== undefined ? importedQ.correctAnswer : 0,
-              isAnswered: false,
+              correct_answer: importedQ?.correctAnswer !== undefined ? importedQ.correctAnswer : 0,
+              is_answered: false,
             };
           });
-          setQuestions(newQuestions);
-          alert("Đã nhập bộ câu hỏi thành công!");
+
+          // Save to Supabase
+          const { error } = await supabase.from('questions').upsert(newQuestions);
+          if (error) throw error;
+
+          setQuestions(newQuestions.map(q => ({
+            id: q.id,
+            question: q.question,
+            options: q.options,
+            correctAnswer: q.correct_answer,
+            isAnswered: q.is_answered
+          })));
+          alert("Đã nhập bộ câu hỏi thành công và lưu vào DB!");
         } else {
           alert("File JSON không hợp lệ.");
         }
       } catch (err) {
-        alert("Lỗi đọc file JSON.");
+        alert("Lỗi đọc file JSON hoặc lưu vào DB.");
       }
     };
     reader.readAsText(file);
@@ -822,7 +834,7 @@ export default function App() {
             </div>
 
             <div className="flex gap-2">
-              <button onClick={handleResetQuestions} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-md transition transform hover:-translate-y-1">
+              <button onClick={handleResetAnswerStatus} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-md transition transform hover:-translate-y-1">
                 Reset câu hỏi
               </button>
               <button onClick={handleResetScores} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-md transition transform hover:-translate-y-1">
