@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './lib/supabase';
-import Auth from './components/Auth';
 import AdminDashboard from './components/AdminDashboard';
-import { LogOut, Shield } from 'lucide-react';
+import { Shield, Settings, Moon, Sun, Volume2, VolumeX } from 'lucide-react';
 
 // --- HỆ THỐNG ÂM THANH (Web Audio API) ---
 const AudioEngine = {
@@ -111,9 +110,7 @@ export default function App() {
   const [isBGMPlaying, setIsBGMPlaying] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   
-  // Auth & Routing State
-  const [session, setSession] = useState<any>(null);
-  const [userProfile, setUserProfile] = useState<any>(null);
+  // Auth & Routing State (Simplified for public access)
   const [isAdminView, setIsAdminView] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -141,8 +138,21 @@ export default function App() {
   // Ref cho Timer
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Khởi tạo Audio khi user tương tác lần đầu
+  // Khởi tạo dữ liệu
   useEffect(() => {
+    const initApp = async () => {
+      try {
+        await fetchGameData();
+        setIsAuthLoading(false);
+      } catch (err: any) {
+        console.error("Init error:", err);
+        setAuthError(err.message || "Lỗi khởi tạo dữ liệu");
+        setIsAuthLoading(false);
+      }
+    };
+
+    initApp();
+
     const handleFirstInteraction = () => {
       AudioEngine.init();
       window.removeEventListener('click', handleFirstInteraction);
@@ -156,51 +166,6 @@ export default function App() {
     AudioEngine.toggleBGM(isBGMPlaying);
     return () => AudioEngine.toggleBGM(false);
   }, [isBGMPlaying]);
-
-  // Auth Logic
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        // Timeout after 5 seconds if Supabase doesn't respond
-        const timeout = setTimeout(() => {
-          if (isAuthLoading) {
-            setIsAuthLoading(false);
-            setAuthError("Không thể kết nối với hệ thống xác thực. Vui lòng kiểm tra cấu hình Supabase.");
-          }
-        }, 5000);
-
-        const { data: { session }, error } = await supabase.auth.getSession();
-        clearTimeout(timeout);
-        
-        if (error) throw error;
-        
-        setSession(session);
-        if (session) {
-          await fetchProfile(session.user.id);
-          await fetchGameData();
-        }
-        setIsAuthLoading(false);
-      } catch (err: any) {
-        console.error("Auth error:", err);
-        setAuthError(err.message || "Lỗi xác thực");
-        setIsAuthLoading(false);
-      }
-    };
-
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) {
-        fetchProfile(session.user.id);
-        fetchGameData();
-      } else {
-        setUserProfile(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   const fetchGameData = async () => {
     try {
@@ -250,20 +215,6 @@ export default function App() {
     } catch (err) {
       console.error("Error fetching game data:", err);
     }
-  };
-
-  const fetchProfile = async (uid: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', uid)
-      .single();
-    if (!error) setUserProfile(data);
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setIsAdminView(false);
   };
 
   // Bộ đếm thời gian
@@ -695,12 +646,12 @@ export default function App() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-indigo-900 text-white p-6">
         <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-yellow-400 mb-4"></div>
-        <p className="text-indigo-200 animate-pulse">Đang kiểm tra quyền truy cập...</p>
+        <p className="text-indigo-200 animate-pulse">Đang tải dữ liệu trò chơi...</p>
       </div>
     );
   }
 
-  if (authError || (!import.meta.env.VITE_SUPABASE_URL && !session)) {
+  if (authError || !import.meta.env.VITE_SUPABASE_URL) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
         <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl text-center">
@@ -724,11 +675,7 @@ export default function App() {
     );
   }
 
-  if (!session) {
-    return <Auth onSuccess={() => {}} />;
-  }
-
-  if (isAdminView && userProfile?.role === 'admin') {
+  if (isAdminView) {
     return (
       <div className="relative">
         <button 
@@ -745,23 +692,21 @@ export default function App() {
   return (
     <div className={`min-h-screen font-sans transition-colors duration-500 flex p-4 gap-4 ${isDarkMode ? 'bg-gray-900 text-gray-100' : 'bg-purple-100/80 text-gray-900'}`} style={{ backgroundColor: isDarkMode ? '#1a1a2e' : '#EAD1EB', backgroundImage: isDarkMode ? 'none' : "url('https://www.transparenttextures.com/patterns/stardust.png')" }}>
       
-      {/* Nút Admin & Logout */}
+      {/* Nút Admin & Cài đặt nhanh */}
       <div className="fixed bottom-4 right-4 flex gap-2 z-40">
-        {userProfile?.role === 'admin' && (
-          <button 
-            onClick={() => setIsAdminView(true)}
-            className="bg-purple-600 text-white p-3 rounded-full shadow-xl hover:bg-purple-700 transition"
-            title="Trang quản trị"
-          >
-            <Shield className="w-6 h-6" />
-          </button>
-        )}
         <button 
-          onClick={handleLogout}
-          className="bg-red-500 text-white p-3 rounded-full shadow-xl hover:bg-red-600 transition"
-          title="Đăng xuất"
+          onClick={() => setIsAdminView(true)}
+          className="bg-purple-600 text-white p-3 rounded-full shadow-xl hover:bg-purple-700 transition"
+          title="Trang quản trị"
         >
-          <LogOut className="w-6 h-6" />
+          <Shield className="w-6 h-6" />
+        </button>
+        <button 
+          onClick={() => setIsDarkMode(!isDarkMode)}
+          className={`p-3 rounded-full shadow-xl transition ${isDarkMode ? 'bg-yellow-400 text-gray-900 hover:bg-yellow-500' : 'bg-gray-800 text-white hover:bg-gray-900'}`}
+          title={isDarkMode ? "Chế độ sáng" : "Chế độ tối"}
+        >
+          {isDarkMode ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
         </button>
       </div>
 

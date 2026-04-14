@@ -11,10 +11,26 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItemName, setNewItemName] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
+    setSearchQuery('');
     fetchData();
   }, [activeTab]);
+
+  const filteredUsers = users.filter(u => 
+    u.email?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    u.id?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredClasses = classes.filter(c => 
+    c.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredQuestions = questions.filter(q => 
+    q.question?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    q.id?.toString().includes(searchQuery)
+  );
 
   const fetchData = async () => {
     setLoading(true);
@@ -135,6 +151,8 @@ export default function AdminDashboard() {
               <input 
                 type="text" 
                 placeholder="Tìm kiếm..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-4 py-2 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
@@ -185,7 +203,7 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {users.map((user) => (
+                {filteredUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 text-sm text-gray-500 font-mono">{user.id.substring(0, 8)}...</td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{user.email}</td>
@@ -229,7 +247,7 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {classes.map((cls) => (
+                {filteredClasses.map((cls) => (
                   <tr key={cls.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 text-sm font-bold text-gray-900">{cls.name}</td>
                     <td className="px-6 py-4 text-sm text-gray-500">{cls.students?.length || 0} học sinh</td>
@@ -256,7 +274,7 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {questions.map((q) => (
+                {filteredQuestions.map((q) => (
                   <tr key={q.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 text-sm text-gray-500 font-mono">{q.id}</td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 max-w-md truncate">{q.question}</td>

@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS public.app_settings (
 );
 
 -- ==========================================
--- THIẾT LẬP BẢO MẬT (RLS)
+-- THIẾT LẬP BẢO MẬT (RLS - CHO PHÉP CÔNG KHAI)
 -- ==========================================
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -53,38 +53,12 @@ ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
 
--- Chính sách cho Profiles
-CREATE POLICY "Users can view their own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Admins can view all profiles" ON public.profiles FOR SELECT USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
-CREATE POLICY "Admins can update profiles" ON public.profiles FOR UPDATE USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
-
--- Chính sách cho Classes (Công khai đọc, Admin sửa)
-CREATE POLICY "Public read classes" ON public.classes FOR SELECT USING (true);
-CREATE POLICY "Admins can manage classes" ON public.classes FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
-
--- Chính sách cho Students (Công khai đọc, Admin sửa)
-CREATE POLICY "Public read students" ON public.students FOR SELECT USING (true);
-CREATE POLICY "Admins can manage students" ON public.students FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
-
--- Chính sách cho Questions (Công khai đọc, Admin sửa)
-CREATE POLICY "Public read questions" ON public.questions FOR SELECT USING (true);
-CREATE POLICY "Admins can manage questions" ON public.questions FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
-
--- Chính sách cho App Settings
-CREATE POLICY "Public read settings" ON public.app_settings FOR SELECT USING (true);
-CREATE POLICY "Admins can manage settings" ON public.app_settings FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
+-- Cho phép mọi người đọc và sửa (Vì bạn muốn ai cũng dùng được)
+CREATE POLICY "Public full access profiles" ON public.profiles FOR ALL USING (true);
+CREATE POLICY "Public full access classes" ON public.classes FOR ALL USING (true);
+CREATE POLICY "Public full access students" ON public.students FOR ALL USING (true);
+CREATE POLICY "Public full access questions" ON public.questions FOR ALL USING (true);
+CREATE POLICY "Public full access settings" ON public.app_settings FOR ALL USING (true);
 
 -- ==========================================
 -- TRIGGERS (Tự động tạo Profile khi Signup)
